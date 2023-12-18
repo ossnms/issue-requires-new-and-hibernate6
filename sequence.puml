@@ -1,0 +1,41 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+
+participant BusinessEjb
+participant CMTTxInterceptor
+participant InterceptorContext
+participant SomeEjb
+participant Hibernate
+participant CachedConnectionManager
+participant DB
+
+note over InterceptorContext: org.jboss.invocation@2.0.0.Final
+/ note over CachedConnectionManager: org.jboss.ironjacamar.impl@3.0.4.Final
+/ note over Hibernate: org.hibernate@6.2.13.Final
+/ note over CMTTxInterceptor: org.jboss.as.ejb3@30.0.1.Final
+== hibernate query in current EJB business method ==
+BusinessEjb --> Hibernate: hibernate query
+Hibernate --> CachedConnectionManager: registerConnection
+Hibernate --> DB: query
+== then call hibernate query in new TX ==
+BusinessEjb --> CMTTxInterceptor: SomeEjb with RequiresNew Tx
+CMTTxInterceptor --> InterceptorContext: proceed
+InterceptorContext --> CachedConnectionManager:pushMetaAwareObject
+InterceptorContext --> SomeEjb:proceed
+SomeEjb --> Hibernate: hibernate query
+Hibernate --> CachedConnectionManager: registerConnection
+Hibernate --> DB: query
+InterceptorContext --> CachedConnectionManager:popMetaAwareObject
+CMTTxInterceptor -->  Hibernate: close (on after completion)
+Hibernate --> CachedConnectionManager: unregisterConnection
+note left of CachedConnectionManager
+cached connection manager for current transaction was already popped causing a log message with:
+IJ000311: Throwable from unregister connection: java.lang.IllegalStateException:
+IJ000152: Trying to return an unknown connection: org.jboss.jca.adapters.jdbc.jdk8.WrappedConnectionJDK8
+end note
+
+
+@enduml
